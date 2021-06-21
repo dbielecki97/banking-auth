@@ -1,7 +1,6 @@
 package service
 
 import (
-	"errors"
 	"fmt"
 	"github.com/dbielecki97/banking-auth/domain"
 	"github.com/dbielecki97/banking-auth/dto"
@@ -12,7 +11,7 @@ import (
 
 type AuthService interface {
 	Login(dto.LoginRequest) (*string, *errs.AppError)
-	Verify(params map[string]string) error
+	Verify(params map[string]string) *errs.AppError
 }
 
 type DefaultAuthService struct {
@@ -38,26 +37,26 @@ func (s DefaultAuthService) Login(req dto.LoginRequest) (*string, *errs.AppError
 	return token, nil
 }
 
-func (s DefaultAuthService) Verify(params map[string]string) error {
+func (s DefaultAuthService) Verify(params map[string]string) *errs.AppError {
 	if jwtToken, err := jwtTokenFromString(params["token"]); err != nil {
-		return errors.New("not authorized")
+		return errs.NewAuthorization(err.Error())
 	} else {
 		if jwtToken.Valid {
 			claims := jwtToken.Claims.(*domain.AccessTokenClaims)
 
 			if claims.IsUserRole() {
 				if !claims.IsRequestVerifiedWithTokenClaims(params) {
-					return errors.New("request not verified with the token claims")
+					return errs.NewAuthorization("request not verified with the token claims")
 				}
 			}
 
 			isAuthorized := s.rolePermissions.IsAuthorizedFor(claims.Role, params["routeName"])
 			if !isAuthorized {
-				return errors.New(fmt.Sprintf("%s role is not authorized", claims.Role))
+				return errs.NewAuthorization(fmt.Sprintf("%s role is not authorized", claims.Role))
 			}
 			return nil
 		} else {
-			return errors.New("invalid token")
+			return errs.NewAuthorization("invalid token")
 		}
 	}
 }
