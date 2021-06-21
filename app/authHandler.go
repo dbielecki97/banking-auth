@@ -2,10 +2,9 @@ package app
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/dbielecki97/banking-auth/dto"
 	"github.com/dbielecki97/banking-auth/service"
-	"log"
+	"github.com/dbielecki97/banking-lib/logger"
 	"net/http"
 )
 
@@ -16,15 +15,14 @@ type AuthHandler struct {
 func (h AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var loginRequest dto.LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&loginRequest); err != nil {
-		log.Println("Error while decoding login request: " + err.Error())
+		logger.Error("Error while decoding login request: " + err.Error())
 		w.WriteHeader(http.StatusBadRequest)
 	} else {
 		token, err := h.service.Login(loginRequest)
 		if err != nil {
-			w.WriteHeader(http.StatusUnauthorized)
-			fmt.Fprintf(w, err.Error())
+			writeResponse(w, err.Code, err.AsMessage())
 		} else {
-			fmt.Fprintf(w, *token)
+			writeResponse(w, http.StatusOK, *token)
 		}
 	}
 }

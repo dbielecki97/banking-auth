@@ -3,6 +3,7 @@ module github.com/dbielecki97/banking-auth
 go 1.16
 
 require (
+	github.com/dbielecki97/banking-lib v1.0.1
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/gorilla/mux v1.8.0
