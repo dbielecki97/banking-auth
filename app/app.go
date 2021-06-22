@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"github.com/dbielecki97/banking-auth/domain"
 	"github.com/dbielecki97/banking-auth/service"
+	"github.com/dbielecki97/banking-lib/logger"
 	"github.com/gorilla/mux"
 	"github.com/jmoiron/sqlx"
-	"log"
 	"net/http"
 	"os"
 	"time"
@@ -23,14 +23,15 @@ func Start() {
 	router.HandleFunc("/auth/login", ah.Login).Methods(http.MethodPost)
 	router.HandleFunc("/auth/register", ah.Register).Methods(http.MethodPost)
 	router.HandleFunc("/auth/verify", ah.Verify).Methods(http.MethodGet)
+	router.HandleFunc("/auth/refresh", ah.Refresh).Methods(http.MethodPost)
 
 	address := os.Getenv("SERVER_ADDRESS")
 	port := os.Getenv("SERVER_PORT")
 
-	log.Printf("Starting OAuth server on %s:%s...", address, port)
+	logger.Info(fmt.Sprintf("Starting OAuth server on %s:%s...", address, port))
 	err := http.ListenAndServe(fmt.Sprintf("%s:%s", address, port), router)
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal(err.Error())
 	}
 }
 
@@ -59,7 +60,7 @@ func sanityCheck() {
 
 func checkEnvVariable(key string) bool {
 	if os.Getenv(key) == "" {
-		log.Println("Environment variable " + key + " not defined!")
+		logger.Error("Environment variable " + key + " not defined!")
 		return false
 	}
 	return true

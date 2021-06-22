@@ -5,13 +5,14 @@ import (
 	"github.com/dbielecki97/banking-auth/domain"
 	"github.com/dbielecki97/banking-auth/dto"
 	"github.com/dbielecki97/banking-lib/errs"
+	"github.com/dbielecki97/banking-lib/logger"
 	"github.com/dgrijalva/jwt-go"
-	"log"
 )
 
 type AuthService interface {
-	Login(dto.LoginRequest) (*string, *errs.AppError)
+	Login(dto.LoginRequest) (*dto.LoginResponse, *errs.AppError)
 	Verify(params map[string]string) *errs.AppError
+	Refresh(request dto.RefreshTokenRequest) (*dto.LoginResponse, *errs.AppError)
 }
 
 type DefaultAuthService struct {
@@ -23,18 +24,28 @@ func NewDefaultAuthService(repo domain.AuthRepository, rolePermissions domain.Ro
 	return &DefaultAuthService{repo: repo, rolePermissions: rolePermissions}
 }
 
-func (s DefaultAuthService) Login(req dto.LoginRequest) (*string, *errs.AppError) {
-	login, err := s.repo.FindBy(req.Username, req.Password)
-	if err != nil {
-		return nil, err
+func (s DefaultAuthService) Login(req dto.LoginRequest) (*dto.LoginResponse, *errs.AppError) {
+	var appErr *errs.AppError
+	var login *domain.Login
+
+	if login, appErr = s.repo.FindBy(req.Username, req.Password); appErr != nil {
+		return nil, appErr
 	}
 
-	token, err := login.GenerateToken()
-	if err != nil {
-		return nil, err
+	claims := login.ClaimsForAccessToken()
+	authToken := domain.NewAuthToken(claims)
+
+	var accessToken string
+	if accessToken, appErr = authToken.NewAccessToken(); appErr != nil {
+		return nil, appErr
 	}
 
-	return token, nil
+	var refreshToken string
+	if refreshToken, appErr = s.repo.GenerateAndSaveRefreshTokenToStore(authToken); appErr != nil {
+		return nil, appErr
+	}
+
+	return &dto.LoginResponse{AccessToken: accessToken, RefreshToken: refreshToken}, nil
 }
 
 func (s DefaultAuthService) Verify(params map[string]string) *errs.AppError {
@@ -66,8 +77,29 @@ func jwtTokenFromString(tokenString string) (*jwt.Token, error) {
 		return []byte(domain.HMACSampleSecret), nil
 	})
 	if err != nil {
-		log.Println("Error while parsing token: " + err.Error())
+		logger.Error("Error while parsing token: " + err.Error())
 		return nil, err
 	}
 	return token, nil
+}
+
+func (s DefaultAuthService) Refresh(request dto.RefreshTokenRequest) (*dto.LoginResponse, *errs.AppError) {
+	if vErr := request.IsAccessTokenValid(); vErr != nil {
+		if vErr.Errors == jwt.ValidationErrorExpired {
+			//continue with refresh token functionality
+
+			var appErr *errs.AppError
+			if appErr = s.repo.RefreshTokenExists(request.RefreshToken); appErr != nil {
+				return nil, appErr
+			}
+
+			var accessToken string
+			if accessToken, appErr = domain.NewAccessTokenFromRefreshToken(request.RefreshToken); appErr != nil {
+				return nil, appErr
+			}
+			return &dto.LoginResponse{AccessToken: accessToken}, nil
+		}
+		return nil, errs.NewAuthentication("invalid token")
+	}
+	return nil, errs.NewAuthentication("cannot generate  a new access token until the current one expires")
 }

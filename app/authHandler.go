@@ -45,6 +45,25 @@ func (h AuthHandler) Verify(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
+
+}
+
+func (h AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
+	var refreshTokenRequest dto.RefreshTokenRequest
+	if err := json.NewDecoder(r.Body).Decode(&refreshTokenRequest); err != nil {
+		logger.Error("Error while decoding login request: " + err.Error())
+		w.WriteHeader(http.StatusBadRequest)
+	} else {
+		token, err := h.service.Refresh(refreshTokenRequest)
+		if err != nil {
+			writeResponse(w, err.Code, err.AsMessage())
+		} else {
+			writeResponse(w, http.StatusOK, *token)
+		}
+	}
+}
+
 func notAuthorizedResponse(msg string) map[string]interface{} {
 	return map[string]interface{}{
 		"is_authorized": false,
@@ -62,8 +81,4 @@ func writeResponse(w http.ResponseWriter, code int, data interface{}) {
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		panic(err)
 	}
-}
-
-func (h AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
-	panic("Not implemented")
 }
