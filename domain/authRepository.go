@@ -1,17 +1,20 @@
 package domain
 
+import "C"
 import (
 	"database/sql"
 	"github.com/dbielecki97/banking-lib/errs"
 	"github.com/dbielecki97/banking-lib/logger"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
+	"strconv"
 )
 
 type AuthRepository interface {
 	FindBy(username string, password string) (*Login, *errs.AppError)
 	GenerateAndSaveRefreshTokenToStore(authToken AuthToken) (string, *errs.AppError)
 	RefreshTokenExists(string) *errs.AppError
+	SaveNewClient(Customer, User) (*string, *errs.AppError)
 }
 
 type AuthRepositoryDb struct {
@@ -74,4 +77,43 @@ func (d AuthRepositoryDb) RefreshTokenExists(refreshToken string) *errs.AppError
 
 	}
 	return nil
+}
+
+func (d AuthRepositoryDb) SaveNewClient(c Customer, u User) (*string, *errs.AppError) {
+	tx, err := d.client.Begin()
+	if err != nil {
+		logger.Error("Could not start transaction" + err.Error())
+		return nil, errs.NewUnexpected("unexpected database error")
+	}
+
+	sqlInsert := "insert into customers (name, date_of_birth, city, zipcode) values (?, ?, ?, ?)"
+	result, err := tx.Exec(sqlInsert, c.Name, c.DateOfBirth, c.City, c.Zipcode)
+	if err != nil {
+		logger.Error("Unexpected database error while saving customer" + err.Error())
+		return nil, errs.NewUnexpected("unexpected database error")
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		tx.Rollback()
+		logger.Error("Unexpected database error" + err.Error())
+		return nil, errs.NewUnexpected("unexpected database error")
+	}
+
+	sqlInsert = "insert into users (username, password, role, customer_id) values (?, ?, ?, ?)"
+
+	_, err = tx.Exec(sqlInsert, u.Username, u.Password, u.Role, id)
+	if err != nil {
+		tx.Rollback()
+		logger.Error("Unexpected database error while saving user" + err.Error())
+		return nil, errs.NewUnexpected("unexpected database error")
+	}
+
+	if err = tx.Commit(); err != nil {
+		tx.Rollback()
+		logger.Error("unexpected error while committing transaction")
+		return nil, errs.NewUnexpected("unexpected database error")
+	}
+	stringId := strconv.FormatInt(id, 10)
+	return &stringId, nil
 }

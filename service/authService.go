@@ -13,6 +13,7 @@ type AuthService interface {
 	Login(dto.LoginRequest) (*dto.LoginResponse, *errs.AppError)
 	Verify(params map[string]string) *errs.AppError
 	Refresh(request dto.RefreshTokenRequest) (*dto.LoginResponse, *errs.AppError)
+	Register(request dto.RegistrationRequest) (*dto.RegistrationResponse, *errs.AppError)
 }
 
 type DefaultAuthService struct {
@@ -102,4 +103,21 @@ func (s DefaultAuthService) Refresh(request dto.RefreshTokenRequest) (*dto.Login
 		return nil, errs.NewAuthentication("invalid token")
 	}
 	return nil, errs.NewAuthentication("cannot generate  a new access token until the current one expires")
+}
+
+func (s DefaultAuthService) Register(request dto.RegistrationRequest) (*dto.RegistrationResponse, *errs.AppError) {
+	if err := request.Validate(); err != nil {
+		return nil, err
+	}
+
+	u := request.CreateUser()
+	c := request.CreateCustomer()
+
+	var appErr *errs.AppError
+	var customerId *string
+	if customerId, appErr = s.repo.SaveNewClient(c, u); appErr != nil {
+		return nil, appErr
+	}
+
+	return &dto.RegistrationResponse{CustomerId: *customerId}, nil
 }

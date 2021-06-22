@@ -46,6 +46,18 @@ func (h AuthHandler) Verify(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
+	var registerRequest dto.RegistrationRequest
+	if err := json.NewDecoder(r.Body).Decode(&registerRequest); err != nil {
+		logger.Error("Error while decoding login request: " + err.Error())
+		w.WriteHeader(http.StatusBadRequest)
+	} else {
+		response, err := h.service.Register(registerRequest)
+		if err != nil {
+			writeResponse(w, err.Code, err.AsMessage())
+		} else {
+			writeResponse(w, http.StatusOK, response)
+		}
+	}
 
 }
 
